@@ -157,4 +157,5 @@ if(mysqli_query($conn, $sqlMov)){
 </div>
 <script src="assets/tema.js"></script>
 </body>
+<?php include "includes/topo.php"; ?>
 </html>

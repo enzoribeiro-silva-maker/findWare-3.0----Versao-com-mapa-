@@ -156,4 +156,5 @@ $produto = mysqli_fetch_assoc($resultado);
 </div>
 <script src="assets/tema.js"></script>
 </body>
+<?php include "includes/topo.php"; ?>
 </html>

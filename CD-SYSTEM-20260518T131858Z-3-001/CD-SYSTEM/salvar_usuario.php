@@ -125,4 +125,5 @@ if(mysqli_query($conn, $sql)) {
 </div>
 <script src="assets/tema.js"></script>
 </body>
+
 </html>

@@ -168,4 +168,5 @@ if(mysqli_num_rows($verifica) == 0){
 </div>
 <script src="assets/tema.js"></script>
 </body>
+
 </html>
