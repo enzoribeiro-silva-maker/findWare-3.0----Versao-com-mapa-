@@ -1,7 +1,8 @@
+
 <?php
 
 /**
- * Model responsável por toda a regra de acesso a dados da tabela `produtos`.
+ * Model responsável pelo acesso aos dados da tabela produtos.
  */
 class Produto
 {
@@ -16,59 +17,131 @@ class Produto
     {
         $sql = 'SELECT * FROM produtos ORDER BY nome ASC';
 
-        if ($limite) {
-            $sql .= ' LIMIT ' . intval($limite);
+        if ($limite !== null && $limite > 0) {
+            $sql .= ' LIMIT ' . (int) $limite;
         }
 
         return $this->pdo->query($sql)->fetchAll();
     }
 
+    public function buscarPorId(int $id): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT id, nome, codigo, codigo_barras, estoque,
+                    corredor, prateleira, nivel, rfid_uid
+             FROM public.produtos
+             WHERE id = :id
+             LIMIT 1'
+        );
+
+        $stmt->execute(['id' => $id]);
+        $produto = $stmt->fetch();
+
+        return $produto ?: null;
+    }
+
     public function buscarPorTermo(string $termo): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT * FROM produtos WHERE nome LIKE :termo OR codigo LIKE :termo OR codigo_barras LIKE :termo ORDER BY nome ASC'
+            'SELECT * FROM produtos
+             WHERE nome LIKE :termo
+                OR codigo LIKE :termo
+                OR codigo_barras LIKE :termo
+             ORDER BY nome ASC'
         );
+
         $stmt->execute(['termo' => "%{$termo}%"]);
+
         return $stmt->fetchAll();
     }
 
     public function buscarPorCodigo(string $codigo): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT * FROM produtos WHERE codigo_barras = :codigo OR codigo = :codigo LIMIT 1'
+            'SELECT * FROM produtos
+             WHERE codigo_barras = :codigo
+                OR codigo = :codigo
+             LIMIT 1'
         );
+
         $stmt->execute(['codigo' => $codigo]);
         $produto = $stmt->fetch();
+
+        return $produto ?: null;
+    }
+
+    public function buscarPorRfidUid(string $uid): ?array
+    {
+        $uid = strtoupper(trim($uid));
+
+        $stmt = $this->pdo->prepare(
+            'SELECT id, nome, codigo, codigo_barras, estoque,
+                    corredor, prateleira, nivel, rfid_uid
+             FROM public.produtos
+             WHERE UPPER(rfid_uid) = :uid
+             LIMIT 1'
+        );
+
+        $stmt->execute(['uid' => $uid]);
+        $produto = $stmt->fetch();
+
         return $produto ?: null;
     }
 
     public function buscarPorTermoOuCodigo(string $termo): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT * FROM produtos WHERE codigo_barras = :termo OR codigo = :termo OR nome LIKE :like LIMIT 1'
+            'SELECT * FROM produtos
+             WHERE codigo_barras = :termo
+                OR codigo = :termo
+                OR nome LIKE :like
+             LIMIT 1'
         );
-        $stmt->execute(['termo' => $termo, 'like' => "%{$termo}%"]);
+
+        $stmt->execute([
+            'termo' => $termo,
+            'like' => "%{$termo}%"
+        ]);
+
         $produto = $stmt->fetch();
+
         return $produto ?: null;
     }
 
     public function criar(array $dados): bool
     {
-        $sql = 'INSERT INTO produtos (nome, codigo, codigo_barras, corredor, prateleira, nivel, estoque)
-                VALUES (:nome, :codigo, :codigo_barras, :corredor, :prateleira, :nivel, :estoque)';
+        $sql = 'INSERT INTO produtos
+                    (nome, codigo, codigo_barras, corredor,
+                     prateleira, nivel, estoque)
+                VALUES
+                    (:nome, :codigo, :codigo_barras, :corredor,
+                     :prateleira, :nivel, :estoque)';
 
         $stmt = $this->pdo->prepare($sql);
+
         return $stmt->execute($dados);
     }
 
-    public function entradaOuCriar(string $codigo, string $nome, int $quantidade, string $corredor, string $prateleira, string $nivel): void
-    {
+    public function entradaOuCriar(
+        string $codigo,
+        string $nome,
+        int $quantidade,
+        string $corredor,
+        string $prateleira,
+        string $nivel
+    ): void {
         $existente = $this->buscarPorCodigo($codigo);
 
         if ($existente) {
             $stmt = $this->pdo->prepare(
-                'UPDATE produtos SET estoque = estoque + :quantidade, corredor = :corredor, prateleira = :prateleira, nivel = :nivel WHERE id = :id'
+                'UPDATE produtos
+                 SET estoque = estoque + :quantidade,
+                     corredor = :corredor,
+                     prateleira = :prateleira,
+                     nivel = :nivel
+                 WHERE id = :id'
             );
+
             $stmt->execute([
                 'quantidade' => $quantidade,
                 'corredor' => $corredor,
@@ -76,6 +149,7 @@ class Produto
                 'nivel' => $nivel,
                 'id' => $existente['id'],
             ]);
+
             return;
         }
 
@@ -95,7 +169,11 @@ class Produto
         $produto = $this->buscarPorCodigo($codigo);
 
         if (!$produto) {
-            return ['ok' => false, 'motivo' => 'nao_encontrado', 'erro' => 'Nenhum produto foi encontrado com o código informado.'];
+            return [
+                'ok' => false,
+                'motivo' => 'nao_encontrado',
+                'erro' => 'Nenhum produto foi encontrado com o código informado.'
+            ];
         }
 
         if ((int) $produto['estoque'] < $quantidade) {
@@ -107,40 +185,96 @@ class Produto
             ];
         }
 
-        $stmt = $this->pdo->prepare('UPDATE produtos SET estoque = estoque - :quantidade WHERE id = :id');
-        $stmt->execute(['quantidade' => $quantidade, 'id' => $produto['id']]);
+        $stmt = $this->pdo->prepare(
+            'UPDATE produtos
+             SET estoque = estoque - :quantidade
+             WHERE id = :id'
+        );
+
+        $stmt->execute([
+            'quantidade' => $quantidade,
+            'id' => $produto['id']
+        ]);
 
         return ['ok' => true, 'produto' => $produto];
     }
 
-    public function atualizarLocalizacao(string $codigo, string $corredor, string $prateleira, string $nivel): bool
-    {
+    public function atualizarLocalizacao(
+        string $codigo,
+        string $corredor,
+        string $prateleira,
+        string $nivel
+    ): bool {
         $stmt = $this->pdo->prepare(
-            'UPDATE produtos SET corredor = :corredor, prateleira = :prateleira, nivel = :nivel WHERE codigo_barras = :codigo OR codigo = :codigo'
+            'UPDATE produtos
+             SET corredor = :corredor,
+                 prateleira = :prateleira,
+                 nivel = :nivel
+             WHERE codigo_barras = :codigo
+                OR codigo = :codigo'
         );
-        return $stmt->execute(compact('corredor', 'prateleira', 'nivel', 'codigo'));
+
+        return $stmt->execute(compact(
+            'corredor',
+            'prateleira',
+            'nivel',
+            'codigo'
+        ));
     }
 
     public function excluir(int $id): bool
     {
-        $stmt = $this->pdo->prepare('DELETE FROM produtos WHERE id = :id');
+        $stmt = $this->pdo->prepare(
+            'DELETE FROM produtos WHERE id = :id'
+        );
+
         return $stmt->execute(['id' => $id]);
     }
 
     public function contar(): int
     {
-        return (int) $this->pdo->query('SELECT COUNT(*) FROM produtos')->fetchColumn();
+        return (int) $this->pdo
+            ->query('SELECT COUNT(*) FROM produtos')
+            ->fetchColumn();
     }
 
     public function somarEstoque(): int
     {
-        return (int) $this->pdo->query('SELECT COALESCE(SUM(estoque), 0) FROM produtos')->fetchColumn();
+        return (int) $this->pdo
+            ->query('SELECT COALESCE(SUM(estoque), 0) FROM produtos')
+            ->fetchColumn();
     }
 
     public function contarEstoqueBaixo(int $limite = 5): int
     {
-        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM produtos WHERE estoque <= :limite');
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM produtos WHERE estoque <= :limite'
+        );
+
         $stmt->execute(['limite' => $limite]);
+
         return (int) $stmt->fetchColumn();
+    }
+
+    public function vincularRfid(int $produtoId, string $uid): bool
+    {
+        $uid = strtoupper(trim($uid));
+
+        if ($produtoId <= 0 || $uid === '' || strlen($uid) > 32) {
+            return false;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'UPDATE public.produtos
+             SET rfid_uid = :uid
+             WHERE id = :id'
+        );
+
+        $stmt->execute([
+            'uid' => $uid,
+            'id' => $produtoId
+        ]);
+
+        return $stmt->rowCount() > 0;
     }
 }

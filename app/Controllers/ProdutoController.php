@@ -191,4 +191,133 @@ public function buscarPorCodigoJson(): void
     $this->json(['encontrado' => false]);
 }
 
+public function buscarPorRfidJson(): void
+{
+    header('Content-Type: application/json; charset=utf-8');
+
+    $uid = strtoupper(trim($_GET['uid'] ?? ''));
+
+    if ($uid === '') {
+        http_response_code(400);
+        echo json_encode([
+            'encontrado' => false,
+            'mensagem' => 'UID não informado.'
+        ]);
+        return;
+    }
+
+    try {
+        $produtoModel = new Produto();
+        $produto = $produtoModel->buscarPorRfidUid($uid);
+
+        if (!$produto) {
+            echo json_encode([
+                'encontrado' => false,
+                'uid' => $uid,
+                'mensagem' => 'Tag RFID sem produto vinculado.'
+            ]);
+            return;
+        }
+
+        echo json_encode([
+            'encontrado' => true,
+            'produto' => $produto
+        ]);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        echo json_encode([
+            'encontrado' => false,
+            'mensagem' => 'Erro ao consultar a tag RFID.'
+        ]);
+    }
+}
+
+public function vincularRfid(): void
+{
+    header('Content-Type: application/json; charset=utf-8');
+
+    $uid = strtoupper(trim($_POST['uid'] ?? ''));
+    $produtoId = filter_input(INPUT_POST, 'produto_id', FILTER_VALIDATE_INT);
+
+    if ($uid === '' || strlen($uid) > 32 || !$produtoId || $produtoId <= 0) {
+        http_response_code(400);
+        echo json_encode([
+            'sucesso' => false,
+            'mensagem' => 'Informe um UID válido e o ID do produto.'
+        ]);
+        return;
+    }
+
+    try {
+        $produtoModel = new Produto();
+
+        // Confirma se o produto existe antes de vincular.
+        $produto = $produtoModel->buscarPorId($produtoId);
+
+        if (!$produto) {
+            http_response_code(404);
+            echo json_encode([
+                'sucesso' => false,
+                'mensagem' => 'Produto não encontrado.'
+            ]);
+            return;
+        }
+
+        $salvou = $produtoModel->vincularRfid($produtoId, $uid);
+
+        if (!$salvou) {
+            http_response_code(409);
+            echo json_encode([
+                'sucesso' => false,
+                'mensagem' => 'Não foi possível vincular a tag. Verifique se ela já está vinculada.'
+            ]);
+            return;
+        }
+
+        echo json_encode([
+            'sucesso' => true,
+            'mensagem' => 'Tag RFID vinculada ao produto com sucesso.'
+        ]);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        echo json_encode([
+            'sucesso' => false,
+            'mensagem' => 'Erro ao vincular a tag RFID. Verifique se ela já está vinculada a outro produto.'
+        ]);
+    }
+}
+
+public function listarJson(): void
+{
+    header('Content-Type: application/json; charset=utf-8');
+
+    try {
+        $produtoModel = new Produto();
+        $produtos = $produtoModel->todos();
+
+        $resultado = array_map(function ($produto) {
+            return [
+                'id' => (int) $produto['id'],
+                'nome' => $produto['nome'] ?? '',
+                'codigo' => $produto['codigo'] ?? '',
+                'codigo_barras' => $produto['codigo_barras'] ?? ''
+            ];
+        }, $produtos);
+
+        echo json_encode(
+            $resultado,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+    } catch (Throwable $e) {
+        http_response_code(500);
+
+        echo json_encode([
+            'sucesso' => false,
+            'mensagem' => 'Não foi possível carregar os produtos.'
+        ], JSON_UNESCAPED_UNICODE);
+    }
+}
+
+
+
 }
